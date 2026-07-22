@@ -6,6 +6,9 @@ A native macOS app that monitors GitHub Actions workflow runs across every repo 
 ![Swift](https://img.shields.io/badge/Swift-5.9-orange?logo=swift)
 ![MIT License](https://img.shields.io/badge/license-MIT-green)
 [![GitHub](https://img.shields.io/badge/github-dipockdas%2Fgittracker-181717?logo=github)](https://github.com/dipockdas/gittracker)
+[![CodeQL](https://github.com/dipockdas/gittracker/actions/workflows/codeql.yml/badge.svg)](https://github.com/dipockdas/gittracker/actions/workflows/codeql.yml)
+[![SwiftLint](https://github.com/dipockdas/gittracker/actions/workflows/swiftlint.yml/badge.svg)](https://github.com/dipockdas/gittracker/actions/workflows/swiftlint.yml)
+[![Dependabot](https://img.shields.io/badge/Dependabot-enabled-025E8C?logo=dependabot)](https://github.com/dipockdas/gittracker/security/dependabot)
 
 ## Features
 
