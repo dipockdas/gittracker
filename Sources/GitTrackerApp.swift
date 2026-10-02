@@ -8,7 +8,7 @@ struct GitTrackerApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(viewModel)
-                .frame(minWidth: 800, minHeight: 500)
+                .frame(minWidth: 420, minHeight: 220)
         }
         .windowResizability(.contentMinSize)
         .commands {

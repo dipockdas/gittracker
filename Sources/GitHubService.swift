@@ -5,6 +5,7 @@ enum GitHubError: LocalizedError {
     case noData
     case rateLimited
     case unauthorized
+    case notFound
     case networkError(String)
     case decodingError(String)
 
@@ -14,6 +15,7 @@ enum GitHubError: LocalizedError {
         case .noData: return "No data received"
         case .rateLimited: return "API rate limit exceeded. Please wait."
         case .unauthorized: return "Invalid or missing GitHub token. Check settings."
+        case .notFound: return "Organization or repository not found"
         case .networkError(let msg): return "Network error: \(msg)"
         case .decodingError(let msg): return "Data error: \(msg)"
         }
@@ -32,12 +34,49 @@ class GitHubService {
 
     // MARK: - Repos
 
-    func fetchRepos(org: String, token: String) async throws -> [GitHubRepo] {
+    func fetchRepos(owner: String, token: String) async throws -> [GitHubRepo] {
+        let encoded = Self.pathEscape(owner)
+        do {
+            return try await fetchPagedRepos(path: "/orgs/\(encoded)/repos", token: token)
+        } catch {
+            guard case GitHubError.notFound = error else { throw error }
+            return try await fetchUserRepos(owner: owner, encodedOwner: encoded, token: token)
+        }
+    }
+
+    /// `/users/{user}/repos` only returns public repos, even with a PAT.
+    /// When the token belongs to this user, `/user/repos` includes private ones.
+    private func fetchUserRepos(owner: String, encodedOwner: String, token: String) async throws -> [GitHubRepo] {
+        if let me = try? await fetchAuthenticatedUser(token: token),
+           me.login.caseInsensitiveCompare(owner) == .orderedSame {
+            return try await fetchPagedRepos(
+                path: "/user/repos",
+                token: token,
+                query: "affiliation=owner&sort=pushed"
+            )
+        }
+        return try await fetchPagedRepos(
+            path: "/users/\(encodedOwner)/repos",
+            token: token,
+            query: "type=all&sort=pushed"
+        )
+    }
+
+    private func fetchAuthenticatedUser(token: String) async throws -> GitHubUser {
+        let data = try await performRequest(urlString: "\(baseURL)/user", token: token)
+        return try JSONDecoder().decode(GitHubUser.self, from: data)
+    }
+
+    private func fetchPagedRepos(
+        path: String,
+        token: String,
+        query: String = "type=all&sort=pushed"
+    ) async throws -> [GitHubRepo] {
         var allRepos: [GitHubRepo] = []
         var page = 1
 
         while true {
-            let url = "\(baseURL)/orgs/\(org)/repos?per_page=100&page=\(page)&type=all&sort=full_name"
+            let url = "\(baseURL)\(path)?per_page=100&page=\(page)&\(query)"
             let data = try await performRequest(urlString: url, token: token)
             let repos = try JSONDecoder().decode([GitHubRepo].self, from: data)
             allRepos.append(contentsOf: repos)
@@ -45,13 +84,17 @@ class GitHubService {
             page += 1
         }
 
-        return allRepos.sorted { $0.name.lowercased() < $1.name.lowercased() }
+        return allRepos
+    }
+
+    private struct GitHubUser: Codable {
+        let login: String
     }
 
     // MARK: - Workflow Runs
 
     func fetchWorkflowRuns(owner: String, repo: String, token: String) async throws -> [WorkflowRun] {
-        let url = "\(baseURL)/repos/\(owner)/\(repo)/actions/runs?per_page=20"
+        let url = "\(baseURL)/repos/\(Self.pathEscape(owner))/\(Self.pathEscape(repo))/actions/runs?per_page=20"
         let data = try await performRequest(urlString: url, token: token)
         let response = try JSONDecoder().decode(WorkflowRunsResponse.self, from: data)
         return response.workflowRuns
@@ -59,15 +102,15 @@ class GitHubService {
 
     // MARK: - All Runs Across Repos
 
-    func fetchAllWorkflowRuns(repos: [GitHubRepo], token: String) async -> [String: [WorkflowRun]] {
+    func fetchAllWorkflowRuns(reposWithTokens: [(GitHubRepo, String)]) async -> [String: [WorkflowRun]] {
         var result: [String: [WorkflowRun]] = [:]
 
         await withTaskGroup(of: (String, [WorkflowRun]).self) { group in
-            for repo in repos {
+            for (repo, token) in reposWithTokens {
                 group.addTask {
                     do {
                         let runs = try await self.fetchWorkflowRuns(
-                            owner: repo.fullName.split(separator: "/").first.map(String.init) ?? "",
+                            owner: repo.owner,
                             repo: repo.name,
                             token: token
                         )
@@ -84,6 +127,10 @@ class GitHubService {
         }
 
         return result
+    }
+
+    private static func pathEscape(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? value
     }
 
     // MARK: - Request
@@ -113,7 +160,7 @@ class GitHubService {
             }
             throw GitHubError.unauthorized
         case 404:
-            throw GitHubError.networkError("Organization or repository not found")
+            throw GitHubError.notFound
         default:
             throw GitHubError.networkError("HTTP \(httpResponse.statusCode)")
         }

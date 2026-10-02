@@ -8,13 +8,37 @@ struct GitHubRepo: Codable, Identifiable, Hashable {
     let fullName: String
     let `private`: Bool
     let description: String?
+    let pushedAt: String?
 
     enum CodingKeys: String, CodingKey {
         case id, name
         case fullName = "full_name"
         case `private`
         case description
+        case pushedAt = "pushed_at"
     }
+
+    var owner: String {
+        fullName.split(separator: "/").first.map(String.init) ?? ""
+    }
+
+    var pushedAtDate: Date? {
+        guard let pushedAt else { return nil }
+        return Self.iso8601WithFractional.date(from: pushedAt)
+            ?? Self.iso8601.date(from: pushedAt)
+    }
+
+    private static let iso8601WithFractional: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }()
+
+    private static let iso8601: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
 
     func hash(into hasher: inout Hasher) {
         hasher.combine(id)
@@ -22,6 +46,20 @@ struct GitHubRepo: Codable, Identifiable, Hashable {
 
     static func == (lhs: GitHubRepo, rhs: GitHubRepo) -> Bool {
         lhs.id == rhs.id
+    }
+}
+
+// MARK: - Tracked Organization
+
+struct TrackedOrg: Identifiable, Codable, Hashable {
+    let id: UUID
+    var login: String
+    var loadAllRepositories: Bool
+
+    init(id: UUID = UUID(), login: String, loadAllRepositories: Bool = true) {
+        self.id = id
+        self.login = login
+        self.loadAllRepositories = loadAllRepositories
     }
 }
 
@@ -115,6 +153,20 @@ struct ActiveWorkflow: Identifiable {
 enum SidebarSelection: Hashable {
     case active
     case repo(GitHubRepo)
+}
+
+enum WorkflowListMode: String, CaseIterable, Identifiable {
+    case active
+    case recent
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .active: return "Active"
+        case .recent: return "Recent"
+        }
+    }
 }
 
 enum WorkflowStatus {
