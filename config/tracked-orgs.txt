@@ -1,0 +1,7 @@
+# One organisation per line. An org-level webhook covers every repo in it,
+# so adding a repo to the org later needs no change here.
+#
+# Requires the admin:org_hook scope on your gh token:
+#   gh auth refresh -h github.com -s admin:org_hook
+
+Stealth-Micro-SaaS

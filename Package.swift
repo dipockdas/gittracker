@@ -9,6 +9,12 @@ let package = Package(
             name: "GitTracker",
             path: "Sources",
             exclude: ["Resources/Info.plist"]
+        ),
+        .executableTarget(
+            name: "gittracker-receiver",
+            path: "Receiver",
+            exclude: ["test-receiver.sh", "com.dipock.gittracker-receiver.plist"],
+            linkerSettings: [.linkedLibrary("sqlite3")]
         )
     ]
 )

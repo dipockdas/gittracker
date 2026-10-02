@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.dipock.gittracker-receiver</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/dipockdas/Projects/gittracker/.build/release/gittracker-receiver</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>GITTRACKER_PORT</key><string>8787</string>
+  </dict>
+  <key>WorkingDirectory</key><string>/Users/dipockdas/Projects/gittracker</string>
+  <key>StandardOutPath</key><string>/Users/dipockdas/Library/Logs/gittracker-receiver.log</string>
+  <key>StandardErrorPath</key><string>/Users/dipockdas/Library/Logs/gittracker-receiver.err</string>
+</dict>
+</plist>

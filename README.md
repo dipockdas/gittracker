@@ -32,12 +32,59 @@ A native macOS app that monitors GitHub Actions workflow runs across every repo 
 git clone https://github.com/dipockdas/gittracker.git
 cd gittracker
 
-make        # build
-make run    # build + launch
-make clean  # clean build artifacts
+make              # build
+make run          # build + launch
+make clean        # clean build artifacts
+make receiver     # build the webhook receiver daemon
+make receiver-test  # run the receiver test suite
 ```
 
 Or open `Package.swift` in Xcode and run from there.
+
+## Webhook Receiver
+
+Polling the REST API does not scale past a few dozen repositories: at 60s
+intervals, 300 repos needs ~18,000 requests/hour against a 5,000/hour limit.
+The receiver inverts that — GitHub *pushes* `workflow_run` events to a local
+daemon, so status arrives within a second and costs no API budget at all.
+
+- **`gittracker-receiver`** — a standalone Swift executable listening on
+  `127.0.0.1:8787`. Verifies `X-Hub-Signature-256` (HMAC-SHA256, constant-time),
+  then writes to SQLite in WAL mode. No third-party dependencies; `Network`
+  framework and `CryptoKit` only.
+- **Two tables.** `runs` holds the latest state per repo, upserted in place as a
+  run progresses. `deliveries` is an audit log of every POST including
+  rejections, so "did the webhook fire?" is a query rather than a guess.
+- **Fails closed.** With no secret configured it returns `503` and stores
+  nothing, so the database cannot be poisoned while unprotected.
+
+The database is the contract between the daemon and the app — they share no
+Swift types, so a refactor on either side cannot break the other.
+
+### Setup
+
+```bash
+brew install cloudflared
+scripts/setup-tunnel.sh your-domain.com     # tunnel, DNS route, launchd, secret
+make receiver
+launchctl bootstrap gui/$(id -u) \
+  ~/Library/LaunchAgents/com.dipock.gittracker-receiver.plist
+
+gh auth refresh -h github.com -s admin:org_hook   # only needed for org-level hooks
+scripts/register-webhooks.sh --dry-run             # inspect
+scripts/register-webhooks.sh                       # create
+```
+
+`scripts/setup-tunnel.sh` publishes `https://hooks.<domain>` to the local
+receiver using a Cloudflare named tunnel (free, unmetered, stable hostname).
+`scripts/register-webhooks.sh` is idempotent: it reads `config/tracked-orgs.txt`
+(one org-level hook each, covering every repo in the org) and
+`config/tracked-repos.txt` (a hook per repo, since GitHub has no user-level
+webhook). Re-run it after editing either list.
+
+Note that the receiver only records events while the tunnel is running, and
+webhooks only fire for activity after registration — keep a slow poll running
+for reconciliation and backfill.
 
 ## Usage
 
@@ -66,8 +113,17 @@ Sources/
 ├── GitHubService.swift       # GitHub REST API client
 ├── Models.swift              # Data models (WorkflowRun, GitHubRepo, ActiveWorkflow)
 ├── KeychainManager.swift     # Secure token storage wrapper
+├── SettingsView.swift        # Multi-organization settings UI
 └── Resources/
     └── Info.plist            # App metadata
+
+Receiver/
+├── main.swift                # Routing, ping handling, signature gate
+├── HTTPServer.swift          # HTTP/1.1 over the Network framework
+├── WebhookVerifier.swift     # HMAC-SHA256 signature check
+├── WebhookEvent.swift        # workflow_run payload decoding
+├── RunStore.swift            # SQLite persistence (runs + delivery audit log)
+└── test-receiver.sh          # End-to-end test suite
 ```
 
 ## License

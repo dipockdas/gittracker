@@ -1,0 +1,10 @@
+# Personal repos to watch, one owner/repo per line.
+# There is no user-level GitHub webhook, so each repo here needs its own hook.
+# scripts/register-webhooks.sh creates them idempotently — add a line, re-run it.
+#
+# To find candidates with actual workflow activity:
+#   gh api "/user/repos?per_page=100&affiliation=owner" --jq '.[].full_name'
+#
+# Examples:
+# dipockdas/agent
+# dipockdas/agent-relay-releases
